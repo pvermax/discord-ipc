@@ -1,4 +1,3 @@
-// index.js
 const net = require('net');
 const crypto = require('crypto');
 const os = require('os');
@@ -119,7 +118,27 @@ class DiscordIPC extends EventEmitter {
             }
         }
 
-        throw new Error(`Could not connect to Discord: ${lastError?.message}`);
+        // If all connections failed, provide helpful error message
+        const troubleshootingMsg = this.getTroubleshootingMessage();
+        throw new Error(`Could not connect to Discord: ${lastError?.message}\n\n${troubleshootingMsg}`);
+    }
+
+    /**
+     * Get troubleshooting message
+     */
+    getTroubleshootingMessage() {
+        return `
+Troubleshooting Steps:
+1. Make sure Discord desktop app is running and logged in
+2. Enable Rich Presence in Discord Settings:
+   - Go to Settings > Activity Privacy
+   - Enable "Display current activity as a status message"
+3. Try restarting Discord completely
+4. Make sure your Discord client is up to date
+5. If using Discord Web, try the desktop app instead
+
+For more help, visit: https://support.discord.com/
+        `.trim();
     }
 
     /**
@@ -133,7 +152,7 @@ class DiscordIPC extends EventEmitter {
             connectionTimeout = setTimeout(() => {
                 socket.destroy();
                 reject(new Error('Connection timeout'));
-            }, 5000);
+            }, 2000); // Shorter timeout like the working version
 
             socket.on('connect', () => {
                 clearTimeout(connectionTimeout);
@@ -303,18 +322,102 @@ class DiscordIPC extends EventEmitter {
     }
 
     /**
+     * Send handshake (simple method for compatibility)
+     */
+    sendHandshake() {
+        const handshake = {
+            v: 1,
+            client_id: this.clientId
+        };
+        this.send(0, handshake); // Opcode 0 = Handshake
+    }
+
+    /**
+     * Send authorize command (simple method for compatibility)
+     */
+    sendAuthorize(nonce) {
+        const authorize = {
+            cmd: 'AUTHORIZE',
+            nonce: nonce,
+            args: {
+                client_id: this.clientId,
+                scopes: ['rpc', 'identify']
+            }
+        };
+        this.send(1, authorize); // Opcode 1 = Frame
+    }
+
+    /**
+     * Simple receive method (compatible with original)
+     */
+    receive() {
+        return new Promise((resolve, reject) => {
+            if (!this.connected || !this.socket) {
+                reject(new Error('Not connected to Discord'));
+                return;
+            }
+
+            let buffer = Buffer.alloc(0);
+            let opcode = null;
+            let payloadLength = null;
+
+            const onData = (data) => {
+                buffer = Buffer.concat([buffer, data]);
+
+                // Read header first
+                if (opcode === null && buffer.length >= 8) {
+                    opcode = buffer.readUInt32LE(0);
+                    payloadLength = buffer.readUInt32LE(4);
+                    buffer = buffer.slice(8);
+                }
+
+                // Read payload
+                if (opcode !== null && buffer.length >= payloadLength) {
+                    const payload = buffer.slice(0, payloadLength).toString('utf8');
+                    this.socket.removeListener('data', onData);
+
+                    try {
+                        resolve(JSON.parse(payload));
+                    } catch (e) {
+                        resolve(payload);
+                    }
+                }
+            };
+
+            this.socket.on('data', onData);
+
+            // Timeout after 5 seconds
+            setTimeout(() => {
+                this.socket.removeListener('data', onData);
+                reject(new Error('Receive timeout'));
+            }, 5000);
+        });
+    }
+
+    /**
      * Authenticate with Discord
      */
     async authenticate(accessToken = null) {
         if (!accessToken) {
             // Try to authorize without token (for basic RPC)
             try {
-                await this.sendCommand('AUTHORIZE', {
+                const response = await this.sendCommand('AUTHORIZE', {
                     client_id: this.clientId,
                     scopes: ['rpc']
-                });
+                }, 15000); // Longer timeout for auth
+
+                this.log('Authorization successful');
+
             } catch (error) {
-                this.log('Authorization failed, continuing without auth', 'warn');
+                this.log(`Authorization failed: ${error.message}`, 'warn');
+
+                // Check if it's a specific auth error
+                if (error.message.includes('Invalid Client ID') || error.message.includes('Unknown Application')) {
+                    throw new Error(`Invalid Client ID: ${this.clientId}. Please check your Discord Application ID.`);
+                }
+
+                // Continue without auth for basic functionality
+                this.log('Continuing without full authentication - some features may be limited', 'warn');
             }
         } else {
             await this.sendCommand('AUTHENTICATE', {
@@ -620,111 +723,3 @@ module.exports = {
     ButtonStyles
 };
 
-declare module 'discord-ipc' {
-    import { EventEmitter } from 'events';
-
-    export enum ActivityTypes {
-        PLAYING = 0,
-        STREAMING = 1,
-        LISTENING = 2,
-        WATCHING = 3,
-        CUSTOM = 4,
-        COMPETING = 5
-    }
-
-    export enum ButtonStyles {
-        PRIMARY = 1,
-        SECONDARY = 2,
-        SUCCESS = 3,
-        DANGER = 4,
-        LINK = 5
-    }
-
-    export interface DiscordIPCOptions {
-        clientId?: string;
-        debug?: boolean;
-        autoReconnect?: boolean;
-        reconnectDelay?: number;
-        maxReconnectAttempts?: number;
-    }
-
-    export interface Activity {
-        name?: string;
-        type?: number;
-        url?: string;
-        details?: string;
-        state?: string;
-        timestamps?: {
-            start?: number | Date;
-            end?: number | Date;
-        };
-        assets?: {
-            large_image?: string;
-            large_text?: string;
-            small_image?: string;
-            small_text?: string;
-        };
-        party?: {
-            id?: string;
-            size?: [number, number];
-        };
-        buttons?: Array<{
-            label: string;
-            url: string;
-        }>;
-        application_id?: string;
-    }
-
-    export declare class DiscordIPC extends EventEmitter {
-        constructor(options?: DiscordIPCOptions);
-
-        connect(): Promise<void>;
-        disconnect(): void;
-        handshake(): Promise<void>;
-        authenticate(accessToken?: string): Promise<void>;
-
-        setActivity(activity: Activity): Promise<void>;
-        clearActivity(): Promise<void>;
-
-        subscribe(event: string, args?: any): Promise<any>;
-        unsubscribe(event: string, args?: any): Promise<any>;
-
-        getUser(userId: string): Promise<any>;
-        getGuilds(): Promise<any>;
-        getChannels(guildId?: string): Promise<any>;
-
-        getStatus(): {
-            connected: boolean;
-            authenticated: boolean;
-            clientId: string;
-            currentActivity: Activity | null;
-            reconnectAttempts: number;
-        };
-
-        on(event: 'connect', listener: () => void): this;
-        on(event: 'disconnect', listener: () => void): this;
-        on(event: 'authenticated', listener: () => void): this;
-        on(event: 'ready', listener: (data: any) => void): this;
-        on(event: 'error', listener: (error: Error) => void): this;
-        on(event: 'activitySet', listener: (activity: Activity) => void): this;
-        on(event: 'activityCleared', listener: () => void): this;
-        on(event: 'message', listener: (message: any) => void): this;
-        on(event: 'dispatch', listener: (event: string, data: any) => void): this;
-    }
-
-    export declare class ActivityBuilder {
-        constructor();
-
-        setName(name: string): this;
-        setType(type: number): this;
-        setDetails(details: string): this;
-        setState(state: string): this;
-        setTimestamps(start?: number | Date, end?: number | Date): this;
-        setAssets(largeImage?: string, largeText?: string, smallImage?: string, smallText?: string): this;
-        setParty(id: string, size?: number, max?: number): this;
-        addButton(label: string, url: string): this;
-        setStreamingUrl(url: string): this;
-
-        build(): Activity;
-    }
-}
