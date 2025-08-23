@@ -100,32 +100,40 @@ setGameActivity().catch(console.error);
 ### Music Listening Activity
 
 ```javascript
-const { DiscordIPC, ActivityTypes, ActivityBuilder } = require("discord-ipc");
+const { DiscordIPC, ActivityTypes } = require("./discord-ipc");
 
-const client = new DiscordIPC({ clientId: "your_client_id" });
+const client = new DiscordIPC({ clientId: CLIENT_ID, debug: true });
 
 async function setMusicActivity() {
-  await client.connect();
-  await client.handshake();
-  await client.authenticate();
+    try {
+        await client.connect();
+        await client.handshake();
+        await client.authenticate();
 
-  // Using ActivityBuilder for cleaner code
-  const activity = new ActivityBuilder()
-    .setType(ActivityTypes.LISTENING)
-    .setName("Spotify")
-    .setDetails("Bohemian Rhapsody")
-    .setState("by Queen")
-    .setTimestamps(Date.now(), Date.now() + 354000) // 5:54 song
-    .setAssets(
-      "queen_album_cover",
-      "A Night at the Opera",
-      "spotify_icon",
-      "Spotify"
-    )
-    .build();
-
-  await client.setActivity(activity);
+        // Direct setActivity call - no ActivityBuilder needed
+        await client.setActivity({
+            name: "Player",
+            type: ActivityTypes.LISTENING,
+            details: "Bohemian Rhapsody",
+            state: "by Queen",
+            timestamps: {
+                start: Math.floor(Date.now() / 1000),
+                end: Math.floor(Date.now() / 1000) + 354
+            },
+            assets: {
+                large_image: "queen_album_cover",
+                large_text: "A Night at the Opera",
+                small_image: "xyz",
+                small_text: "Player"
+            }
+        });
+        console.log('Activity set!');
+        setInterval(() => { }, 1000);
+    } catch (error) {
+        console.error('Error:', error.message);
+    }
 }
+setMusicActivity();
 ```
 
 ### Streaming Activity
@@ -238,61 +246,4 @@ async function getDiscordInfo() {
     console.error("Failed to get Discord info:", error);
   }
 }
-```
-
-### Real-time Game Status
-
-```javascript
-class GameStatusTracker {
-    constructor(clientId) {
-        this.client = new DiscordIPC({ clientId, autoReconnect: true });
-        this.gameState = {
-            level: 1,
-            score: 0,
-            health: 100
-        };
-        this.startTime = Date.now();
-    }
-
-    async start() {
-        await this.client.connect();
-        await this.client.handshake();
-        await this.client.authenticate();
-
-        // Update activity every 10 seconds
-        setInterval(() => {
-            this.updateActivity();
-        }, 10000);
-
-        // Initial activity
-        await this.updateActivity();
-    }
-
-    async updateActivity() {
-        const activity = {
-            name: 'Epic Adventure Game',
-            type: ActivityTypes.PLAYING,
-            details: `Level ${this.gameState.level}`,
-            state: `Score: ${this.gameState.score} | HP: ${this.gameState.health}`,
-            timestamps: {
-                start: this.startTime
-            },
-            assets: {
-                large_image: 'game_logo',
-                large_text: 'Epic Adventure',
-                small_image: this.gameState.health > 50 ? 'health_good' : 'health_low',
-                small_text: `Health: ${this.gameState.health}%`
-            }
-        };
-
-        await this.client.setActivity(activity);
-    }
-
-    // Game event handlers
-    onLevelUp(newLevel) {
-        this.gameState.level = newLevel;
-        this.updateActivity();
-    }
-
-    onScoreChange(newScore) {
 ```
