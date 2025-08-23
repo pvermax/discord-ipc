@@ -100,7 +100,7 @@ setGameActivity().catch(console.error);
 ### Music Listening Activity
 
 ```javascript
-const { DiscordIPC, ActivityTypes } = require("./discord-ipc");
+const { DiscordIPC, ActivityTypes } = require("discord-ipc");
 
 const client = new DiscordIPC({ clientId: CLIENT_ID, debug: true });
 
