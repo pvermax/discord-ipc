@@ -1,0 +1,22 @@
+{
+    "name": "discord-ipc",
+    "version": "1.0.0",
+    "description": "Advanced Discord Rich Presence IPC client with support for all activity types and comprehensive features",
+    "main": "index.js",
+    "types": "index.d.ts",
+    "keywords": [
+        "discord",
+        "rpc",
+        "rich-presence",
+        "ipc",
+        "activity",
+        "game",
+        "status"
+    ],
+    "author": "pvermax",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/pvermax/discord-ipc.git"
+    }
+}
