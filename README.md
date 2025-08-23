@@ -122,7 +122,6 @@ async function setMusicActivity() {
       "spotify_icon",
       "Spotify"
     )
-    .addButton("Listen on Spotify", "https://open.spotify.com/track/...")
     .build();
 
   await client.setActivity(activity);
