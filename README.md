@@ -197,53 +197,5 @@ client.on("ready", (data) => {
   console.log("📡 Discord RPC Ready:", data);
 });
 
-// Subscribe to Discord events
-client.on("authenticated", async () => {
-  // Subscribe to voice channel events
-  await client.subscribe("VOICE_CHANNEL_SELECT");
-
-  // Subscribe to message events
-  await client.subscribe("MESSAGE_CREATE", {
-    channel_id: "your_channel_id",
-  });
-});
-
-client.on("dispatch", (event, data) => {
-  console.log(`📨 Discord Event [${event}]:`, data);
-
-  switch (event) {
-    case "VOICE_CHANNEL_SELECT":
-      console.log("Voice channel changed:", data);
-      break;
-    case "MESSAGE_CREATE":
-      console.log("New message:", data);
-      break;
-  }
-});
 ```
 
-### Getting Discord Data
-
-```javascript
-async function getDiscordInfo() {
-  await client.connect();
-  await client.handshake();
-  await client.authenticate();
-
-  try {
-    // Get user info
-    const user = await client.getUser("user_id_here");
-    console.log("User:", user);
-
-    // Get guilds (servers)
-    const guilds = await client.getGuilds();
-    console.log("Guilds:", guilds);
-
-    // Get channels
-    const channels = await client.getChannels("guild_id_here");
-    console.log("Channels:", channels);
-  } catch (error) {
-    console.error("Failed to get Discord info:", error);
-  }
-}
-```
